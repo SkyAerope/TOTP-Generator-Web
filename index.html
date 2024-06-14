@@ -84,8 +84,8 @@ function copyKey() {
 
       var key = document.getElementById('key').value;
 
-      // 将所有小写字母转换为大写字母
-      key = key.toUpperCase();
+      // 将所有小写字母转换为大写字母并去掉空格
+      key = key.toUpperCase().replace(/\s/g, "");
       // 将Base32编码的密钥解码为二进制
       key = base32Decode(key);
 
