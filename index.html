@@ -77,53 +77,66 @@ function copyKey() {
 </script>
   
   <script>
-    var timerId;
+    const timeStep = 30;
+    const timeStepMs = timeStep * 1000;
+    let lastKey = null;
+    let decodedKey = null;
+    let lastCounter = null;
+    let lastRemainingSeconds = null;
+    let frameId = null;
 
+    // 仅在密钥变化时解码，避免重复处理
     function generateTOTP() {
-      clearTimeout(timerId); // 清除之前的定时器
+      const key = document.getElementById('key').value
+        .toUpperCase().replace(/\s/g, '');
 
-      var key = document.getElementById('key').value;
+      if (key !== lastKey) {
+        lastKey = key;
+        decodedKey = base32Decode(key);
+        lastCounter = null;
+      }
 
-      // 将所有小写字母转换为大写字母并去掉空格
-      key = key.toUpperCase().replace(/\s/g, "");
-      // 将Base32编码的密钥解码为二进制
-      key = base32Decode(key);
+      updateTOTP();
+      if (frameId === null) {
+        frameId = requestAnimationFrame(animateProgress);
+      }
+    }
 
-      // 定义哈希算法
-      var digestAlgorithm = 'SHA-1';
+    function updateTOTP() {
+      const now = Date.now();
+      const counter = Math.floor(now / timeStepMs);
 
-      // 获取当前时间戳
-      var timeStep = 30;  // 默认时间步长为30秒
-      var currTime = Math.floor(Date.now() / 1000);
+      // 验证码只在时间窗口切换或密钥变化时重新计算
+      if (decodedKey !== null && counter !== lastCounter) {
+        const message = counter.toString(16).padStart(16, '0');
+        const hmacHash = hmacSHA1(decodedKey, hexToBytes(message));
+        const offset = hmacHash[19] & 0xf;
+        let otp =
+          ((hmacHash[offset] & 0x7f) << 24) |
+          (hmacHash[offset + 1] << 16) |
+          (hmacHash[offset + 2] << 8) |
+          hmacHash[offset + 3];
+        otp = (otp % 1000000).toString().padStart(6, '0');
 
-      // 计算到下一个30秒的剩余时间并减去1秒以确保刚好取到当前的30秒
-      var remainingTime = timeStep - (currTime % timeStep) - 1;
-      var remainingTimems = timeStep - (Date.now() / 1000 % timeStep) - 1;
+        document.getElementById('totp').textContent = otp;
+        lastCounter = counter;
+      }
 
-      // 计算基于时间的单次密码
-      var message = Math.floor(currTime / timeStep).toString(16);
-      message = message.padStart(16, '0');
-      var hmacHash = hmacSHA1(key, hexToBytes(message));
-      var offset = hmacHash[19] & 0xf;
-      var otp =
-        ((hmacHash[offset] & 0x7f) << 24) |
-        (hmacHash[offset + 1] << 16) |
-        (hmacHash[offset + 2] << 8) |
-        hmacHash[offset + 3];
-      otp = (otp % 1000000).toString().padStart(6, '0');
+      const remainingMs = timeStepMs - (now % timeStepMs);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      if (remainingSeconds !== lastRemainingSeconds) {
+        document.getElementById('remaining-time').textContent =
+          '剩余时间: ' + remainingSeconds + ' 秒';
+        lastRemainingSeconds = remainingSeconds;
+      }
 
-      // 更新TOTP密码和剩余时间的显示
-      document.getElementById('totp').textContent = otp;
-      document.getElementById('remaining-time').textContent = '剩余时间: ' + remainingTime + ' 秒';
+      // 按真实时间更新进度，而不是依赖定时器的调用次数
+      document.getElementById('progress').value = remainingMs / timeStepMs * 100;
+    }
 
-      // 更新进度条
-      var progress = document.getElementById('progress');
-      var progressWidth = (remainingTimems / timeStep) * 100;
-      progress.style.display = 'block';
-      progress.value = progressWidth;
-
-      // 每0.1秒更新一次
-      timerId = setTimeout(generateTOTP, 100);
+    function animateProgress() {
+      updateTOTP();
+      frameId = requestAnimationFrame(animateProgress);
     }
 
     // Base32解码
