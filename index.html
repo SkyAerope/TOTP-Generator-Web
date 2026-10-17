@@ -102,11 +102,35 @@ function copyKey() {
     let lastCounter = null;
     let lastRemainingSeconds = null;
     let frameId = null;
+    let resetAnimation = null;
+
+    // 空密钥时恢复页面首次打开的状态，并停止计时和动画
+    function resetTOTP() {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      resetAnimation?.cancel();
+      resetAnimation = null;
+      lastKey = '';
+      decodedKey = null;
+      lastCounter = null;
+      lastRemainingSeconds = null;
+
+      document.getElementById('totp').textContent = '';
+      document.getElementById('remaining-time').textContent = '';
+      document.getElementById('progress').value = 0;
+    }
 
     // 仅在密钥变化时解码，避免重复处理
     function generateTOTP() {
       const key = document.getElementById('key').value
         .toUpperCase().replace(/\s/g, '');
+
+      if (!key) {
+        resetTOTP();
+        return;
+      }
 
       if (key !== lastKey) {
         lastKey = key;
@@ -156,11 +180,13 @@ function copyKey() {
       // 仅在30秒周期结束时播放短暂的回满动画；正常缩短不使用缓动。
       if (isNewPeriod && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         progress.updateComplete.then(() => {
+          // 清空密钥后，不能再播放尚未开始的回满动画
+          if (!lastKey) return;
           const indicator = progress.shadowRoot?.querySelector('[part="indicator"]');
-          indicator?.animate(
+          resetAnimation = indicator?.animate(
             [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
             { duration: 280, easing: 'ease-out' }
-          );
+          ) ?? null;
         });
       }
     }
