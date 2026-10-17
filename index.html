@@ -18,6 +18,24 @@
     .typo-display-4,.typo-display-4-opacity{font-weight:300;font-size:112px;letter-spacing:-.04em}.typo-display-4-opacity{opacity:.54}
     .text-center{text-align:center!important}
     .center{display:block!important;margin-right:auto!important;margin-left:auto!important}
+    #totp{
+      font-size:clamp(2.5rem,15vw,7rem);
+      line-height:1.15;
+      min-height:1.15em;
+      margin:16px 0;
+      white-space:nowrap;
+      font-variant-numeric:tabular-nums;
+    }
+    #remaining-time{
+      min-height:24px;
+      line-height:24px;
+      margin:0 0 12px;
+    }
+    /* MDUI's default width transition competes with frame-by-frame updates. */
+    mdui-linear-progress::part(indicator){
+      transition:none!important;
+      transform-origin:left center;
+    }
 
   </style>
   <!-- MDUI CSS -->
@@ -30,7 +48,7 @@
   <!-- MDUI JavaScript -->
   <script src="https://unpkg.com/mdui@2.0.3/mdui.global.js"></script>
 </head>
-<body class="container"></body>
+<body class="container">
   <mdui-top-app-bar>
     <mdui-top-app-bar-title>TOTP 生成器</mdui-top-app-bar-title>
     <div style="flex-grow: 1"></div>
@@ -107,6 +125,7 @@ function copyKey() {
       const counter = Math.floor(now / timeStepMs);
 
       // 验证码只在时间窗口切换或密钥变化时重新计算
+      const isNewPeriod = lastCounter !== null && counter !== lastCounter;
       if (decodedKey !== null && counter !== lastCounter) {
         const message = counter.toString(16).padStart(16, '0');
         const hmacHash = hmacSHA1(decodedKey, hexToBytes(message));
@@ -131,7 +150,19 @@ function copyKey() {
       }
 
       // 按真实时间更新进度，而不是依赖定时器的调用次数
-      document.getElementById('progress').value = remainingMs / timeStepMs * 100;
+      const progress = document.getElementById('progress');
+      progress.value = remainingMs / timeStepMs * 100;
+
+      // 仅在30秒周期结束时播放短暂的回满动画；正常缩短不使用缓动。
+      if (isNewPeriod && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        progress.updateComplete.then(() => {
+          const indicator = progress.shadowRoot?.querySelector('[part="indicator"]');
+          indicator?.animate(
+            [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+            { duration: 280, easing: 'ease-out' }
+          );
+        });
+      }
     }
 
     function animateProgress() {
